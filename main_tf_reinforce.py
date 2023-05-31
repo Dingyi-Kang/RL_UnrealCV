@@ -28,7 +28,7 @@ def preprocess(observation):
 def stack_frames(stacked_frames, frame, buffer_size):
     if stacked_frames is None:
         #the * operator can be used to "unpack" the list or tuple into separate arguments.
-        #In the context of your code, frame.shape returns a tuple representing the shape of the frame (for example, (height, width)). So, *frame.shape would unpack this tuple into separate arguments.
+        #here, frame.shape returns a tuple representing the shape of the frame (for example, (height, width)). So, *frame.shape would unpack this tuple into separate arguments.
         stacked_frames = np.zeros((buffer_size, *frame.shape))
         for idx, _ in enumerate(stacked_frames):
             stacked_frames[idx,:] = frame
