@@ -1,0 +1,130 @@
+shared_model = build_model(
+        env.observation_space, env.action_space, args, device_share).to(device_share)
+
+def build_model(obs_space, action_space, args, device):
+    model = A3C_Dueling(obs_space, action_space, args, device)
+    model.train()
+    return model
+
+
+class A3C_Dueling(torch.nn.Module):
+    def __init__(self, obs_space, action_space, args, device=None):
+        super(A3C_Dueling, self).__init__()
+        self.num_agents = len(obs_space)
+        obs_shapes = [obs_space[i].shape for i in range(self.num_agents)]
+        stack_frames = args.stack_frames
+        rnn_out = args.rnn_out
+        head_name = args.network
+        self.single = args.single
+        self.device = device
+        if 'continuous' in head_name:
+            self.continuous = True
+            self.action_dim_tracker = action_space[0].shape[0]
+        else:
+            self.continuous = False
+            self.action_dim_tracker = action_space[0].n
+        self.player0 = A3C(obs_shapes[0], action_space[0], rnn_out, head_name, stack_frames, device=device)
+        if not self.single:
+            if 'tat' in head_name:
+                self.tat = True
+                self.player1 = TAT(obs_shapes[1], action_space[1], rnn_out,
+                                   head_name, stack_frames*2, self.action_dim_tracker, device=device)
+            else:
+                self.tat = False
+                self.player1 = A3C(obs_shapes[1], action_space[1], rnn_out, head_name, stack_frames, device=device)
+
+    def forward(self, inputs, test=False):
+        states, (hx, cx) = inputs
+
+        # run tracker
+        value0, action_0, entropy_0, log_prob_0, (hx_0, cx_0) = self.player0((states[0], (hx[:1], cx[:1])), test)
+
+        if self.single or states.shape[0] == 1:
+            return value0, [action_0], entropy_0, log_prob_0, (hx_0, cx_0), 0
+
+        # run target
+        R_pred = 0
+        if self.tat:
+            if self.continuous:  # onehot action
+                action2target = torch.Tensor(action_0.squeeze())
+            else:
+                action2target = torch.zeros(self.action_dim_tracker)
+                action2target[action_0] = 1
+            state_target = torch.cat((states[0], states[1]), 0)
+            value1, action_1, entropy_1, log_prob_1, (hx1, cx1), R_pred = self.player1(
+                (state_target, (hx[1:], cx[1:]), action2target.to(self.device)), test)
+        else:
+            value1, action_1, entropy_1, log_prob_1, (hx1, cx1) = self.player1((states[1], (hx[1:], cx[1:])), test)
+        entropies = torch.cat([entropy_0, entropy_1])
+        log_probs = torch.cat([log_prob_0, log_prob_1])
+        hx_out = torch.cat((hx_0, hx1))
+        cx_out = torch.cat((cx_0, cx1))
+
+        return torch.cat([value0, value1]), [action_0, action_1], entropies, log_probs, (hx_out, cx_out), R_pred
+
+
+
+class A3C(torch.nn.Module):
+    def __init__(self, obs_space, action_space, rnn_out=128, head_name='cnn_lstm',  stack_frames=1, sub_task=False, device=None):
+        super(A3C, self).__init__()
+        self.sub_task = sub_task
+        self.head_name = head_name
+        self.encoder = perception.CNN_simple(obs_space, stack_frames)
+        feature_dim = self.encoder.outdim
+
+        self.lstm = nn.LSTMCell(feature_dim, rnn_out)
+        self.lstm.bias_ih.data.fill_(0)
+        self.lstm.bias_hh.data.fill_(0)
+        feature_dim = rnn_out
+        
+        #  create actor
+        self.actor = PolicyNet(feature_dim, action_space, head_name, device)
+        self.critic = ValueNet(feature_dim)
+
+        self.apply(weights_init)
+        self.train()
+
+    def forward(self, inputs, test=False):
+        x, (hx, cx) = inputs
+        feature = self.encoder(x)
+
+        hx, cx = self.lstm(feature, (hx, cx))
+        feature = hx
+        
+        value = self.critic(feature)
+        action, entropy, log_prob = self.actor(feature, test)
+
+        return value, action, entropy, log_prob, (hx, cx)
+
+
+class CNN_simple(nn.Module):
+    def __init__(self, obs_shape, stack_frames):
+        super(CNN_simple, self).__init__()
+        self.conv1 = nn.Conv2d(obs_shape[0], 32, 5, stride=1, padding=2)
+        self.maxp1 = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(32, 32, 5, stride=1, padding=1)
+        self.maxp2 = nn.MaxPool2d(2, 2)
+        self.conv3 = nn.Conv2d(32, 64, 4, stride=1, padding=1)
+        self.maxp3 = nn.MaxPool2d(2, 2)
+        self.conv4 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.maxp4 = nn.MaxPool2d(2, 2)
+
+        relu_gain = nn.init.calculate_gain('relu')
+        self.conv1.weight.data.mul_(relu_gain)
+        self.conv2.weight.data.mul_(relu_gain)
+        self.conv3.weight.data.mul_(relu_gain)
+        self.conv4.weight.data.mul_(relu_gain)
+
+        dummy_state = Variable(torch.rand(stack_frames, obs_shape[0], obs_shape[1], obs_shape[2]))
+        out = self.forward(dummy_state)
+        self.outdim = out.size(-1)
+        self.apply(weights_init)
+        self.train()
+
+    def forward(self, x):
+        x = F.relu(self.maxp1(self.conv1(x)))
+        x = F.relu(self.maxp2(self.conv2(x)))
+        x = F.relu(self.maxp3(self.conv3(x)))
+        x = F.relu(self.maxp4(self.conv4(x)))
+        x = x.view(1, -1)
+        return x
