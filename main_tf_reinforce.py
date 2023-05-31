@@ -40,7 +40,7 @@ def stack_frames(stacked_frames, frame, buffer_size):
 
 if __name__ == '__main__':
     '''may continue training by making it ture'''
-    load_checkpoint = True #False
+    load_checkpoint = False #True
     dir_path = 'tmp/checkpoints'
     # Check if the directory exists
     if not os.path.exists(dir_path):
