@@ -40,12 +40,12 @@ def stack_frames(stacked_frames, frame, buffer_size):
 
 if __name__ == '__main__':
     '''may continue training by making it ture'''
-    load_checkpoint = False #True
+    load_checkpoint = False
     dir_path = 'tmp/checkpoints'
     # Check if the directory exists
     if not os.path.exists(dir_path):
         # If the directory does not exist, create it
-        print("!!!!Successfully created the directory")
+        print("!!!Successfully created the directory")
         os.makedirs(dir_path)
 
     inpSize = 336
@@ -82,35 +82,35 @@ if __name__ == '__main__':
         elif i >= num_episodes - 100:
             print('episode: ', i,'score: ', score)
         observations = env.reset()
-        #env.render()
-        #print(observations.shape) #(2, 336, 336, 3)
+        # env.render()
+        # print(observations.shape) #(2, 336, 336, 3)
         ## use only the view of the tracker
-        observation = preprocess(observations[agentIndex]) #print('Shape of preprocessedObservation: ', observation.shape)
-        #observation = observations[agentIndex]
+        curr_observation = preprocess(observations[agentIndex]) #print('Shape of preprocessedObservation: ', observation.shape)
         stacked_frames = None
-        stacked_frames = stack_frames(stacked_frames, observation, stack_size)
+        stacked_frames = stack_frames(stacked_frames, curr_observation, stack_size)
         score = 0
         while not done:
             action = agent.choose_action(stacked_frames)
+
             observations, rewards, done, info = env.step(action)
-            
+            #print('Shape of rewards: ', rewards.shape) #-->(2,)
+            reward = rewards[agentIndex]
+            agent.store_transition(curr_observation, action, reward)
+
             #cv2.imwrite('tracker_view.png', cv2.cvtColor(observations[agentIndex], cv2.COLOR_RGB2BGR))
             #only record first and last 100 episodes
             if i < 100 or i >= num_episodes - 100:
               out.write(observations[agentIndex])
 
-            observation = preprocess(observations[agentIndex])
-            #observation = observations[agentIndex]
-            stacked_frames = stack_frames(stacked_frames, observation, stack_size)
-            #print('Shape of rewards: ', rewards.shape) #-->(2,)
-            reward = rewards[agentIndex]
-            agent.store_transition(observation, action, reward)
-
+            curr_observation = preprocess(observations[agentIndex])
+            stacked_frames = stack_frames(stacked_frames, curr_observation, stack_size)
+            
             score += reward
         score_history.append(score)
+        
+        agent.learn()
 
-        if i % 10 == 0:
-            agent.learn()
+        if i % 50 == 0:
             agent.save_checkpoint()
     plotLearning(score_history, filename=filename, window=20)
     env.close()
