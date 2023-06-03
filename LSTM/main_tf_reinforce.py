@@ -40,7 +40,7 @@ def stack_frames(stacked_frames, frame, buffer_size):
 
 if __name__ == '__main__':
     '''may continue training by making it ture'''
-    load_checkpoint = True#False
+    load_checkpoint = False
     dir_path = 'tmp/checkpoints'
     # Check if the directory exists
     if not os.path.exists(dir_path):
@@ -79,7 +79,7 @@ if __name__ == '__main__':
             avg_score = np.mean(score_history[max(0, i-20):(i+1)])
             print('episode: ', i,'score: ', score, ' average score %.3f' % avg_score)
             plotLearning(score_history, filename=filename, window=20)
-        elif i >= num_episodes - 100:
+        else:
             print('episode: ', i,'score: ', score)
         observations = env.reset()
         # env.render()

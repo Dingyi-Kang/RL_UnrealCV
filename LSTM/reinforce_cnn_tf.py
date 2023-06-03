@@ -50,7 +50,7 @@ class PolicyGradientAgent(object):
         observation = np.array(observation).reshape((1, 4, self.input_height,
                                                      self.input_width,
                                                      self.channels))
-        #one layer is batch size (only one batch); second layer is time sequence (use the last one)
+
         probabilities = self.model.predict(observation)[0][-1]
         #print(probabilities)
         action = np.random.choice(self.action_space, p=probabilities)
