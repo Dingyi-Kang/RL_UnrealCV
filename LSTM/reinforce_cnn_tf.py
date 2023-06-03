@@ -50,7 +50,8 @@ class PolicyGradientAgent(object):
         observation = np.array(observation).reshape((1, 4, self.input_height,
                                                      self.input_width,
                                                      self.channels))
-
+        
+        #one layer is batch size (only one batch); second layer is time sequence (we use the last one)
         probabilities = self.model.predict(observation)[0][-1]
         #print(probabilities)
         action = np.random.choice(self.action_space, p=probabilities)
@@ -66,6 +67,7 @@ class PolicyGradientAgent(object):
         seqLength = len(self.state_memory)
         state_memory = np.array(self.state_memory).reshape(
             (1, seqLength, self.input_height, self.input_width, self.channels))
+        #3D is required. the second dimension is time sequence
         action_memory = np.array(self.action_memory).reshape(1, seqLength, 1)
         reward_memory = np.array(self.reward_memory)
 
