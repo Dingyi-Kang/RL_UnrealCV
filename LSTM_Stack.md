@@ -1,0 +1,1 @@
+Instead of feeding all obervations at different timestamps into the LSTM, this one stack observation with sequence of a fixed number, and feed these stacked sequence of obs into obs. Each LSTM will only have one predict value (which is the predicted probabilities of actions for last obs)
