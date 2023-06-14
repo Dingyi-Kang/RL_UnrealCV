@@ -121,7 +121,7 @@ def create_cnn(observation_dimensions, num_actions):
     model.add(Flatten())
     model.add(Dense(512, activation='relu'))
     model.add(Dense(256, activation='relu'))
-    model.add(Dense(num_actions, activation='softmax'))
+    model.add(Dense(num_actions, activation=None))
 
     return model
 def logprobabilities(logits, a):
